@@ -7,7 +7,6 @@ on:
   pull_request:
     branches:
       - main
-
 jobs:
   build_and_push:
     runs-on: ubuntu-latest
@@ -18,6 +17,12 @@ jobs:
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
+
+    - name: Set valid Docker repository name
+      id: set_repo_name
+      run: |
+        REPO_NAME=$(echo ${{ github.event.repository.name }} | tr '[:upper:]' '[:lower:]')
+        echo "REPOSITORY_NAME=$REPO_NAME" >> $GITHUB_ENV
 
     - name: Log in to GitHub Container Registry
       uses: docker/login-action@v3
@@ -31,4 +36,4 @@ jobs:
       with:
         context: .
         push: true
-        tags: ghcr.io/konosuke_aida/kong_bootcamp:latest
+        tags: ghcr.io/${{ github.repository_owner }}/${{ env.REPOSITORY_NAME }}:latest

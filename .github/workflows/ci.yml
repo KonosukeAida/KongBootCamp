@@ -1,40 +1,78 @@
-name: Docker Image CI/CD
+name: Build, Scan, and Push to GHCR
 
 on:
   push:
     branches:
-      - main
-  pull_request:
-    branches:
-      - main
+      - main # mainブランチへのプッシュをトリガーとする
+
+env:
+  # GHCRのレジストリURL
+  REGISTRY: ghcr.io
+  # イメージのオーナー/リポジトリ名
+  IMAGE_REPOSITORY: ${{ github.repository_owner }}/${{ github.event.repository.name }}
+  # コミットSHAをユニークなタグとして使用
+  IMAGE_TAG: ${{ github.sha }}
+
 jobs:
-  build_and_push:
+  build_scan_push:
     runs-on: ubuntu-latest
+    
+    # ----------------------------------------------------------------------
+    # 認証情報を設定
+    # ----------------------------------------------------------------------
     permissions:
       contents: read
-      packages: write
+      packages: write # GHCRにプッシュするために必要
       
     steps:
     - name: Checkout repository
       uses: actions/checkout@v4
 
-    - name: Set valid Docker tag
-      id: set_tag_name
-      run: |
-        REPO_NAME=$(echo ${{ github.event.repository.name }} | tr '[:upper:]' '[:lower:]')
-        OWNER_NAME=$(echo ${{ github.repository_owner }} | tr '[:upper:]' '[:lower:]')
-        echo "DOCKER_TAG=ghcr.io/$OWNER_NAME/$REPO_NAME:latest" >> $GITHUB_ENV
+    # ----------------------------------------------------------------------
+    # 1. ビルド & スキャン (Trivy)
+    # ----------------------------------------------------------------------
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
 
-    - name: Log in to GitHub Container Registry
+    - name: Log in to the Container Registry (GHCR)
       uses: docker/login-action@v3
       with:
-        registry: ghcr.io
+        registry: ${{ env.REGISTRY }}
         username: ${{ github.actor }}
+        # GITHUB_TOKEN は GitHub Actions 実行時に自動で付与されるトークン
         password: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: Build and push Docker image
+        
+    - name: Build image and Scan with Trivy
+      # docker/build-push-action を使って、ビルド後すぐに Trivy スキャンを組み込む
       uses: docker/build-push-action@v5
       with:
         context: .
-        push: true
-        tags: ${{ env.DOCKER_TAG }}
+        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ env.IMAGE_TAG }}
+        # ビルド後にプッシュせず、ローカルにロード (load: true)
+        load: true
+        # スキャン設定
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        
+    - name: Run Trivy vulnerability scanner on the built image
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ env.IMAGE_TAG }}
+        format: 'table'
+        exit-code: '1' # CRITICALまたはHIGHの脆弱性が見つかった場合、パイプラインを失敗させる
+        severity: 'CRITICAL,HIGH' # チェックする脆弱性の深刻度
+        
+    # ----------------------------------------------------------------------
+    # 2. プッシュ (GHCR)
+    # ----------------------------------------------------------------------
+    - name: Push image to GitHub Container Registry (GHCR)
+      # プッシュ専用にもう一度 build-push-action を実行
+      uses: docker/build-push-action@v5
+      with:
+        context: .
+        tags: ${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ env.IMAGE_TAG }}
+        push: true # GHCRへのプッシュを実行
+        # latestタグも同時にプッシュする場合は以下を追加
+        # tags: |
+        #   ${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:${{ env.IMAGE_TAG }}
+        #   ${{ env.REGISTRY }}/${{ env.IMAGE_REPOSITORY }}:latest

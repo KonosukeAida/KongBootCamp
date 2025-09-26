@@ -1,5 +1,5 @@
 # ベースイメージはdocker runコマンドで使用されているものをそのまま指定
-FROM kong/kong-gateway:3.11
+FROM kong/kong-gateway:3.10
 
 # ----------------------------------------------------------------------
 # 環境変数 (Environment Variables) の設定

@@ -1,0 +1,59 @@
+# values.yaml
+
+# Kong Gatewayのコンテナイメージを指定します。
+image:
+  # ユーザー指定のリポジトリを使用します。
+  repository: ghcr.io/konosukeaida/kongbootcamp
+  # 本番環境での不変性を保証するため、SHAダイジェスト付きのタグを指定します。
+  tag: "9bb9246453072e50118388747156040ed956ccfa"
+  effectiveSemver: v3.10
+
+# データプレーンはプロキシ機能のみを利用するため、Ingress Controllerは無効化します。
+ingressController:
+  enabled: false
+
+# データプレーンのPodに設定する環境変数。
+env:
+  # Kongノードの役割をデータプレーンに設定します。
+  role: data_plane
+  # データプレーンはデータベースを使用しないため"off"に設定します。
+  database: "off"
+  # Konnectとのハイブリッドモードを有効にします。
+  konnect_mode: "on"
+  # Vitals（パフォーマンスメトリクス）を無効にします。
+  vitals: "off"
+  # CP/DP間の通信にPKIベースのmTLSを使用します。
+  cluster_mtls: pki
+  
+  # 以下はKonnect UIから取得した、またはdocker runコマンドで指定された接続情報です。
+  cluster_control_plane: "72ede01046.au.cp.konghq.com:443"
+  cluster_server_name: "72ede01046.au.cp.konghq.com"
+  cluster_telemetry_endpoint: "72ede01046.au.tp.konghq.com:443"
+  cluster_telemetry_server_name: "72ede01046.au.tp.konghq.com"
+  
+  # mTLS認証に使用する証明書とキーのパスを指定します。
+  # このパスは、後述の`secretVolumes`でマウントされるSecret内のファイルに対応します。
+  cluster_cert: /etc/secrets/kong-cluster-cert/tls.crt
+  cluster_cert_key: /etc/secrets/kong-cluster-cert/tls.key
+  
+  # システムの信頼済み証明書ストアを使用します。
+  lua_ssl_trusted_certificate: "system"
+
+# 事前に作成した`kong-cluster-cert` SecretをPodにマウントします。
+# これにより、上記の`cluster_cert`と`cluster_cert_key`で指定したパスでファイルが利用可能になります。
+secretVolumes:
+  - kong-cluster-cert
+
+# データプレーンはプロキシトラフィックのみを処理します。
+proxy:
+  enabled: true
+  # ServiceのタイプをLoadBalancerに設定し、外部IPを割り当てます。
+  type: LoadBalancer
+
+# データプレーンではAdmin APIは不要なため無効化します。
+admin:
+  enabled: false
+
+# データプレーンではKong Managerは不要なため無効化します。
+manager:
+  enabled: false

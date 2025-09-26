@@ -84,7 +84,8 @@ jobs:
       with:
         context: .
         push: true
-        # 💡 latest と SHA タグの両方をプッシュ
+        # ここが変更点です: arm64とamd64の両方のプラットフォームを指定します
+        platforms: linux/amd64,linux/arm64
         tags: |
           ${{ env.SHA_TAG }}
           ${{ env.FULL_IMAGE_NAME }}:latest
